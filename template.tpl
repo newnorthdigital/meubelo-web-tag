@@ -141,12 +141,18 @@ ___TEMPLATE_PARAMETERS___
     ]
   },
   {
-    "type": "CHECKBOX",
-    "name": "debug",
-    "displayName": "Enable Debug Logging",
-    "simpleValueType": true,
-    "defaultValue": false,
-    "help": "Log debug messages to the browser console (visible in GTM Preview mode)."
+    "type": "GROUP",
+    "name": "debugging",
+    "displayName": "Debugging",
+    "groupStyle": "ZIPPY_CLOSED",
+    "subParams": [
+      {
+        "type": "CHECKBOX",
+        "name": "debug",
+        "checkboxText": "Log debug messages to console",
+        "simpleValueType": true
+      }
+    ]
   }
 ]
 
