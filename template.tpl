@@ -291,7 +291,7 @@ if (data.eventType === 'base') {
       saleObj.orderId = makeString(data.orderId);
     }
 
-    debugLog('Calling MOEBEL_SALES.sale() with: ' + JSON.stringify(saleObj));
+    debugLog('Calling MOEBEL_SALES.sale() for order: ' + makeString(data.orderId || 'N/A'));
 
     callLater(function() {
       callInWindow('MOEBEL_SALES.sale', saleObj);
