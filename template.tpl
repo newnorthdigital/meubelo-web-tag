@@ -13,7 +13,7 @@ ___INFO___
   "id": "cvt_temp_public_id",
   "version": 1,
   "securityGroups": [],
-  "displayName": "Meubelo Conversion Tracking",
+  "displayName": "Meubelo Conversion Tracking by New North Digital",
   "categories": ["CONVERSIONS", "ADVERTISING"],
   "brand": {
     "id": "brand_dummy",
