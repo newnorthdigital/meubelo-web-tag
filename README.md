@@ -28,7 +28,7 @@ When a visitor clicks on a product on Meubelo (or any moebel.de portal), a uniqu
 ### From the Community Template Gallery
 
 1. In your GTM container, go to **Templates** > **Search Gallery**
-2. Search for "Meubelo Conversion Tracking"
+2. Search for "Meubelo Conversion Tracking by New North Digital"
 3. Click **Add to workspace**
 
 ### Manual Installation
@@ -44,13 +44,13 @@ You need two tags: one Base Code tag and one Conversion tag.
 
 ### Tag 1: Base Code
 
-1. Create a new tag using the **Meubelo Conversion Tracking** template
+1. Create a new tag using the **Meubelo Conversion Tracking by New North Digital** template
 2. Set **Event Type** to "Base Code (capture click ID)"
 3. Set the trigger to **All Pages** (or a Page View trigger where the URL contains `moeclid=`)
 
 ### Tag 2: Conversion
 
-1. Create a new tag using the **Meubelo Conversion Tracking** template
+1. Create a new tag using the **Meubelo Conversion Tracking by New North Digital** template
 2. Set **Event Type** to "Conversion (report sale)"
 3. Fill in the required fields:
    - **Partner Key**: provided by your Meubelo / moebel.de account manager
