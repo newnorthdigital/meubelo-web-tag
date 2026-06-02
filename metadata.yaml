@@ -1,6 +1,8 @@
 homepage: "https://meubelo.nl"
 documentation: "https://github.com/newnorthdigital/meubelo-web-tag/blob/main/README.md"
 versions:
+  - sha: 2277ecd144d9b303550b5f9751a5569e39682471
+    changeNotes: "Rename to 'Meubelo Conversion Tracking by New North Digital' to clarify non-vendor ownership (gallery review feedback)."
   - sha: ad5446c9f1d6733e769f503d9a3702dda3df976f
     changeNotes: "Embed vendor logo as 96x96 PNG thumbnail; add canonical BOM."
   - sha: 5b69d5a21222d2172c546987690a22827340dab3
