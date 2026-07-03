@@ -2,6 +2,11 @@
 
 A Google Tag Manager web tag template for tracking conversions from [Meubelo](https://meubelo.nl) and other [moebel.de](https://moebel.de) network portals.
 
+## Features
+
+- Captures the `moeclid` click ID on landing and reports the sale on purchase across 9 moebel.de portals.
+- Built-in Consent Mode gate: follows GTM Consent Mode by default, firing only once `ad_storage` is granted and waiting for consent otherwise.
+
 ## Supported Portals
 
 | Market | Portal | Domain |
@@ -62,6 +67,13 @@ You need two tags: one Base Code tag and one Conversion tag.
    - **Items**: JSON array of purchased items
 4. Set the trigger to your **Purchase / Thank You page** event
 
+### Consent
+
+Both tags respect GTM Consent Mode through the **Consent handling** field (under the **Consent** section):
+
+- **Follow GTM Consent Mode (ad_storage)** (default, recommended): the tag stores the click ID or reports the sale only once `ad_storage` is granted, and waits for a consent update if it is not yet given. Consent that is never configured counts as granted, so sites without Consent Mode keep working unchanged.
+- **Fire immediately (I gate consent elsewhere)**: the tag runs right away. Use this when you gate consent with GTM's tag-level consent settings or a consent trigger.
+
 ### Items Format
 
 The Items field expects a JSON array. Each item object must include:
@@ -97,6 +109,7 @@ You can use a GTM variable (e.g., a Custom JavaScript variable or Data Layer var
 | Currency | Yes (conversion) | String | ISO 4217 currency code |
 | Order ID | No | String | Your internal order identifier |
 | Items | Yes (conversion) | JSON | Array of item objects |
+| Consent handling | No | Select | Follow GTM Consent Mode (default) or fire immediately |
 | Enable Debug Logging | No | Checkbox | Log to browser console |
 
 ## Permissions
@@ -107,6 +120,7 @@ This template requires the following permissions:
 - **Access Local Storage**: Reads and writes the `MOEBEL_CLICKOUT_ID` key to persist the click ID
 - **Access Globals**: Sets `PARTNER_KEY` and `MARKET` on the window object (required by the tracking script) and calls `MOEBEL_SALES.sale()`
 - **Get URL**: Reads the page URL to extract the `moeclid` query parameter
+- **Access Consent**: Reads `ad_storage` consent state to gate firing under GTM Consent Mode
 - **Logging**: Debug-mode console logging
 
 ## Resources

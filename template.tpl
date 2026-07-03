@@ -142,6 +142,33 @@ ___TEMPLATE_PARAMETERS___
   },
   {
     "type": "GROUP",
+    "name": "consentGroup",
+    "displayName": "Consent",
+    "groupStyle": "ZIPPY_OPEN",
+    "subParams": [
+      {
+        "type": "SELECT",
+        "name": "consentMode",
+        "displayName": "Consent handling",
+        "macrosInSelect": false,
+        "selectItems": [
+          {
+            "value": "auto",
+            "displayValue": "Follow GTM Consent Mode (ad_storage)"
+          },
+          {
+            "value": "off",
+            "displayValue": "Fire immediately (I gate consent elsewhere)"
+          }
+        ],
+        "simpleValueType": true,
+        "defaultValue": "auto",
+        "help": "\"Follow GTM Consent Mode\" (recommended) fires only once ad_storage is granted, and waits for consent if it is not yet given. \"Fire immediately\" runs right away, for when you gate consent with GTM's tag-level consent settings or a consent trigger. Consent that is never configured counts as granted, so sites without Consent Mode are unaffected."
+      }
+    ]
+  },
+  {
+    "type": "GROUP",
     "name": "debugging",
     "displayName": "Debugging",
     "groupStyle": "ZIPPY_CLOSED",
@@ -172,6 +199,8 @@ var makeNumber = require('makeNumber');
 var getType = require('getType');
 var getTimestampMillis = require('getTimestampMillis');
 var callLater = require('callLater');
+var isConsentGranted = require('isConsentGranted');
+var addConsentListener = require('addConsentListener');
 
 var enableDebug = data.debug;
 
@@ -194,119 +223,148 @@ var scriptBaseUrls = {
   gb: 'https://www.living24.uk/partner/'
 };
 
-if (data.eventType === 'base') {
-  debugLog('Running Base Code - checking for moeclid parameter');
+// Run the tag's work (capture click ID or report the sale). Guarded so it runs
+// at most once, even if the consent listener fires more than once.
+var hasFired = false;
+var fire = function() {
+  if (hasFired) {
+    return;
+  }
+  hasFired = true;
 
-  var fullUrl = getUrl('query');
-  var moeclid = null;
+  if (data.eventType === 'base') {
+    debugLog('Running Base Code - checking for moeclid parameter');
 
-  if (fullUrl) {
-    var parts = fullUrl.split('&');
-    for (var i = 0; i < parts.length; i++) {
-      var part = parts[i];
-      if (part.indexOf('moeclid=') === 0 || part.indexOf('?moeclid=') === 0) {
-        moeclid = part.split('=')[1];
-        break;
+    var fullUrl = getUrl('query');
+    var moeclid = null;
+
+    if (fullUrl) {
+      var parts = fullUrl.split('&');
+      for (var i = 0; i < parts.length; i++) {
+        var part = parts[i];
+        if (part.indexOf('moeclid=') === 0 || part.indexOf('?moeclid=') === 0) {
+          moeclid = part.split('=')[1];
+          break;
+        }
       }
     }
-  }
 
-  if (moeclid) {
-    debugLog('Found moeclid: ' + moeclid);
-    var storageValue = JSON.stringify({
-      clickId: moeclid,
-      date: makeString(getTimestampMillis())
-    });
-    localStorage.setItem(STORAGE_KEY, storageValue);
-    debugLog('Stored moeclid in localStorage');
-  } else {
-    debugLog('No moeclid parameter found in URL');
-  }
-
-  data.gtmOnSuccess();
-
-} else if (data.eventType === 'conversion') {
-  debugLog('Running Conversion tag');
-
-  var stored = localStorage.getItem(STORAGE_KEY);
-
-  if (!stored) {
-    debugLog('No moeclid found in localStorage - visitor not from Meubelo. Exiting.');
-    data.gtmOnSuccess();
-    return;
-  }
-
-  var clickData = JSON.parse(stored);
-
-  if (!clickData || !clickData.clickId) {
-    debugLog('Invalid click data in localStorage. Exiting.');
-    data.gtmOnSuccess();
-    return;
-  }
-
-  var storedTimestamp = makeNumber(clickData.date);
-  var now = getTimestampMillis();
-
-  if (storedTimestamp > 0 && (now - storedTimestamp) > EXPIRY_MS) {
-    debugLog('Stored moeclid has expired (older than 90 days). Removing.');
-    localStorage.removeItem(STORAGE_KEY);
-    data.gtmOnSuccess();
-    return;
-  }
-
-  var clickId = clickData.clickId;
-  debugLog('Found valid moeclid: ' + clickId);
-
-  var market = data.market || 'nl';
-  var partnerKey = data.partnerKey;
-
-  setInWindow('PARTNER_KEY', partnerKey, true);
-  setInWindow('MARKET', market, true);
-
-  var scriptBase = scriptBaseUrls[market] || scriptBaseUrls.nl;
-  var pushUrl = scriptBase + 'push.js';
-
-  debugLog('Injecting push.js from: ' + pushUrl);
-
-  injectScript(pushUrl, function() {
-    debugLog('push.js loaded successfully');
-
-    var itemsData = data.items;
-    var parsedItems;
-
-    if (getType(itemsData) === 'string') {
-      parsedItems = JSON.parse(itemsData);
+    if (moeclid) {
+      debugLog('Found moeclid: ' + moeclid);
+      var storageValue = JSON.stringify({
+        clickId: moeclid,
+        date: makeString(getTimestampMillis())
+      });
+      localStorage.setItem(STORAGE_KEY, storageValue);
+      debugLog('Stored moeclid in localStorage');
     } else {
-      parsedItems = itemsData;
+      debugLog('No moeclid parameter found in URL');
     }
 
-    var saleObj = {
-      total: makeNumber(data.orderTotal),
-      shipping: makeNumber(data.shippingCost),
-      currency: makeString(data.currency || 'EUR'),
-      items: parsedItems
-    };
+    data.gtmOnSuccess();
 
-    if (data.orderId) {
-      saleObj.orderId = makeString(data.orderId);
-    }
+  } else if (data.eventType === 'conversion') {
+    debugLog('Running Conversion tag');
 
-    debugLog('Calling MOEBEL_SALES.sale() for order: ' + makeString(data.orderId || 'N/A'));
+    var stored = localStorage.getItem(STORAGE_KEY);
 
-    callLater(function() {
-      callInWindow('MOEBEL_SALES.sale', saleObj);
-      debugLog('Sale reported successfully');
+    if (!stored) {
+      debugLog('No moeclid found in localStorage - visitor not from Meubelo. Exiting.');
       data.gtmOnSuccess();
-    });
+      return;
+    }
 
-  }, function() {
-    debugLog('Failed to load push.js');
+    var clickData = JSON.parse(stored);
+
+    if (!clickData || !clickData.clickId) {
+      debugLog('Invalid click data in localStorage. Exiting.');
+      data.gtmOnSuccess();
+      return;
+    }
+
+    var storedTimestamp = makeNumber(clickData.date);
+    var now = getTimestampMillis();
+
+    if (storedTimestamp > 0 && (now - storedTimestamp) > EXPIRY_MS) {
+      debugLog('Stored moeclid has expired (older than 90 days). Removing.');
+      localStorage.removeItem(STORAGE_KEY);
+      data.gtmOnSuccess();
+      return;
+    }
+
+    var clickId = clickData.clickId;
+    debugLog('Found valid moeclid: ' + clickId);
+
+    var market = data.market || 'nl';
+    var partnerKey = data.partnerKey;
+
+    setInWindow('PARTNER_KEY', partnerKey, true);
+    setInWindow('MARKET', market, true);
+
+    var scriptBase = scriptBaseUrls[market] || scriptBaseUrls.nl;
+    var pushUrl = scriptBase + 'push.js';
+
+    debugLog('Injecting push.js from: ' + pushUrl);
+
+    injectScript(pushUrl, function() {
+      debugLog('push.js loaded successfully');
+
+      var itemsData = data.items;
+      var parsedItems;
+
+      if (getType(itemsData) === 'string') {
+        parsedItems = JSON.parse(itemsData);
+      } else {
+        parsedItems = itemsData;
+      }
+
+      var saleObj = {
+        total: makeNumber(data.orderTotal),
+        shipping: makeNumber(data.shippingCost),
+        currency: makeString(data.currency || 'EUR'),
+        items: parsedItems
+      };
+
+      if (data.orderId) {
+        saleObj.orderId = makeString(data.orderId);
+      }
+
+      debugLog('Calling MOEBEL_SALES.sale() for order: ' + makeString(data.orderId || 'N/A'));
+
+      callLater(function() {
+        callInWindow('MOEBEL_SALES.sale', saleObj);
+        debugLog('Sale reported successfully');
+        data.gtmOnSuccess();
+      });
+
+    }, function() {
+      debugLog('Failed to load push.js');
+      data.gtmOnFailure();
+    }, 'meubelo-push');
+
+  } else {
+    debugLog('Unknown event type');
     data.gtmOnFailure();
-  }, 'meubelo-push');
+  }
+};
 
+// Consent gate. The click ID stored for attribution and the partner sale beacon
+// require ad_storage. In the default "auto" mode the tag follows GTM Consent
+// Mode: it fires once ad_storage is granted and waits (via a consent listener)
+// if it is not yet. Choose "Fire immediately" to gate consent at the container
+// level instead. Note: isConsentGranted returns true when consent is not
+// configured, so sites without Consent Mode keep firing.
+var consentMode = data.consentMode || 'auto';
+
+if (consentMode === 'off' || isConsentGranted('ad_storage')) {
+  fire();
 } else {
-  debugLog('Unknown event type');
-  data.gtmOnFailure();
+  debugLog('Waiting for ad_storage consent');
+  addConsentListener('ad_storage', function(consentType, granted) {
+    if (granted) {
+      fire();
+    }
+  });
 }
 
 
@@ -536,6 +594,40 @@ ___WEB_PERMISSIONS___
       "isEditedByUser": true
     },
     "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {
+        "publicId": "access_consent"
+      },
+      "param": [
+        {
+          "key": "consentTypes",
+          "value": {
+            "type": 2,
+            "listItem": [
+              {
+                "type": 3,
+                "mapKey": [
+                  { "type": 1, "string": "consentType" },
+                  { "type": 1, "string": "read" },
+                  { "type": 1, "string": "write" }
+                ],
+                "mapValue": [
+                  { "type": 1, "string": "ad_storage" },
+                  { "type": 8, "boolean": true },
+                  { "type": 8, "boolean": false }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "clientAnnotations": {
+      "isEditedByUser": true
+    },
+    "isRequired": true
   }
 ]
 
@@ -547,6 +639,7 @@ scenarios:
   code: |-
     var mockData = {
       eventType: 'base',
+      consentMode: 'off',
       debug: true
     };
 
@@ -578,6 +671,7 @@ scenarios:
   code: |-
     var mockData = {
       eventType: 'base',
+      consentMode: 'off',
       debug: false
     };
 
@@ -607,6 +701,7 @@ scenarios:
       currency: 'EUR',
       orderId: 'ORD-001',
       items: '[{"item_id":"SKU1","quantity":1,"price":149.99,"item_category":"Sofas"}]',
+      consentMode: 'off',
       debug: true
     };
 
@@ -631,6 +726,7 @@ scenarios:
       currency: 'EUR',
       orderId: 'ORD-002',
       items: '[{"item_id":"SKU2","quantity":2,"price":149.99,"item_category":"Chairs"}]',
+      consentMode: 'off',
       debug: true
     };
 
@@ -666,6 +762,7 @@ scenarios:
       shippingCost: '10.00',
       currency: 'EUR',
       items: '[{"item_id":"SKU3","quantity":1,"price":500.00,"item_category":"Tables"}]',
+      consentMode: 'off',
       debug: false
     };
 
@@ -702,6 +799,7 @@ scenarios:
       shippingCost: '5.00',
       currency: 'EUR',
       items: '[{"item_id":"SKU4","quantity":1,"price":100.00,"item_category":"Lamps"}]',
+      consentMode: 'off',
       debug: true
     };
 
@@ -725,6 +823,102 @@ scenarios:
 
     assertApi('gtmOnSuccess').wasCalled();
     assertThat(removedKey).isEqualTo('MOEBEL_CLICKOUT_ID');
+
+- name: "Consent - auto mode fires when ad_storage is already granted"
+  code: |-
+    var mockData = {
+      eventType: 'base',
+      consentMode: 'auto',
+      debug: false
+    };
+
+    mock('isConsentGranted', function(type) { return true; });
+    mock('getUrl', function(component) {
+      if (component === 'query') return 'moeclid=abc-123-def';
+      return '';
+    });
+    mock('localStorage', {
+      setItem: function() {},
+      getItem: function() { return null; },
+      removeItem: function() {}
+    });
+    mock('getTimestampMillis', function() { return 1700000000000; });
+
+    runCode(mockData);
+
+    assertApi('gtmOnSuccess').wasCalled();
+    assertApi('addConsentListener').wasNotCalled();
+
+- name: "Consent - auto mode waits when ad_storage is denied"
+  code: |-
+    var mockData = {
+      eventType: 'base',
+      consentMode: 'auto',
+      debug: false
+    };
+
+    mock('isConsentGranted', function(type) { return false; });
+    mock('addConsentListener', function(type, callback) {});
+
+    runCode(mockData);
+
+    assertApi('addConsentListener').wasCalled();
+    assertApi('gtmOnSuccess').wasNotCalled();
+
+- name: "Consent - fires once after ad_storage is granted via the listener"
+  code: |-
+    var mockData = {
+      eventType: 'base',
+      consentMode: 'auto',
+      debug: false
+    };
+
+    var setItemCount = 0;
+
+    mock('isConsentGranted', function(type) { return false; });
+    mock('addConsentListener', function(type, callback) {
+      callback(type, true);
+    });
+    mock('getUrl', function(component) {
+      if (component === 'query') return 'moeclid=abc-123-def';
+      return '';
+    });
+    mock('localStorage', {
+      setItem: function() { setItemCount++; },
+      getItem: function() { return null; },
+      removeItem: function() {}
+    });
+    mock('getTimestampMillis', function() { return 1700000000000; });
+
+    runCode(mockData);
+
+    assertThat(setItemCount).isEqualTo(1);
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: "Consent - fire immediately skips the consent check"
+  code: |-
+    var mockData = {
+      eventType: 'base',
+      consentMode: 'off',
+      debug: false
+    };
+
+    mock('isConsentGranted', function(type) { return false; });
+    mock('getUrl', function(component) {
+      if (component === 'query') return 'moeclid=abc-123-def';
+      return '';
+    });
+    mock('localStorage', {
+      setItem: function() {},
+      getItem: function() { return null; },
+      removeItem: function() {}
+    });
+    mock('getTimestampMillis', function() { return 1700000000000; });
+
+    runCode(mockData);
+
+    assertApi('gtmOnSuccess').wasCalled();
+    assertApi('addConsentListener').wasNotCalled();
 
 
 ___NOTES___
