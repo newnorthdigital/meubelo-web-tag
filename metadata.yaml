@@ -1,6 +1,8 @@
 homepage: "https://meubelo.nl"
 documentation: "https://github.com/newnorthdigital/meubelo-web-tag/blob/main/README.md"
 versions:
+  - sha: fcd8fc97dd3e946b877646da9080dbabd9f293ab
+    changeNotes: 'Add built-in GTM Consent Mode gate: fires only once consent is granted, with a Fire-immediately option.'
   - sha: a172ec2b78c39382cab8d6fe9e145f5ab9db59c0
     changeNotes: 'NND-badge icon and shortened display name (by New North).'
   - sha: 2277ecd144d9b303550b5f9751a5569e39682471
